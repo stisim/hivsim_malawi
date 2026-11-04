@@ -4,8 +4,8 @@
 
 **Plan.**
 - New targets, all primary (`results/targets.csv`, added at the end so earlier rows keep their numbers): ART coverage (share of PLHIV on ART) from UNAIDS, 2010-2021, all ages; and from MPHIA 2020-21 (Table 9.1.A, 15+), ART coverage and viral suppression among all PLHIV, by sex. Suppression among people on ART is still an input (`vls.csv`), so suppression among PLHIV tests diagnosis and ART together.
-- Model change: general testing is now a function of sex and year (`make_testing` in `models/hivsim/malawi.py`): it rises linearly from `test_start` to 2020, and men's is `test_rel_m` times women's. Low-CD4 and ANC testing are as before.
+- Model change: general testing is now a function of sex and year (`make_testing` in `hivsim/malawi.py`): it rises linearly from `test_start` to 2020, and men's is `test_rel_m` times women's. Low-CD4 and ANC testing are as before.
 - Ranges: exp 02's ten, plus `test_rel_m` 0.5-3 (log) and `test_start` 1995-2010. 200 parameter sets and 10 seeds of the central set, 10,000 agents, 1985-2022.
-- Plots from `models/hivsim/targetfit.py`, with a new figure for ART coverage and the MPHIA cascade; the trajectory checks now start in 2000 and include ART coverage (within 10 percentage points of UNAIDS every year).
+- Plots from `hivsim/targetfit.py`, with a new figure for ART coverage and the MPHIA cascade; the trajectory checks now start in 2000 and include ART coverage (within 10 percentage points of UNAIDS every year).
 
 **Success criteria.** Some runs are within 10 points of UNAIDS ART coverage every year 2010-2021, within MPHIA's intervals for ART coverage and suppression among PLHIV for both sexes, and reach the ART input (over 95% of it) through 2020, while keeping exp 02's later epidemic. If the ART input is reached but men stay low, the split between the sexes needs more than testing (for example linkage or loss from care, `sti.HIVCare`).

@@ -1,6 +1,6 @@
 # Exp 01 — Can HIVsim Malawi reach the targets?
 
-**Question.** Over plausible ranges for its uncertain parameters, does HIVsim Malawi (`models/hivsim/malawi.py`) produce runs that bracket the agreed targets (`results/targets.csv`, `docs/targets.md`)? This is a check of the model and the ranges before any fitting. If some target falls outside every run, the ranges are wrong or the model is missing something, and fitting won't fix that. An exact match isn't the aim yet.
+**Question.** Over plausible ranges for its uncertain parameters, does HIVsim Malawi (`hivsim/malawi.py`) produce runs that bracket the agreed targets (`results/targets.csv`, `docs/targets.md`)? This is a check of the model and the ranges before any fitting. If some target falls outside every run, the ranges are wrong or the model is missing something, and fitting won't fix that. An exact match isn't the aim yet.
 
 **Plan.**
 - 200 parameter sets from a Latin hypercube over the ranges below, one run each, 10,000 agents, 1985-2021. Also 10 runs (different seeds) of one central set, to show how much of the spread is random noise, and the run time.

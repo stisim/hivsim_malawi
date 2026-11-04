@@ -1,6 +1,6 @@
 """
 Exp 01: run HIVsim Malawi over a Latin hypercube of the ranges in config.yaml, and 10 seeds of the central set;
-write each run's target values to outputs/results.jsonl as it finishes; then plot (models/hivsim/targetfit.py)
+write each run's target values to outputs/results.jsonl as it finishes; then plot (hivsim/targetfit.py)
 
     nice python run.py
 """
@@ -14,7 +14,7 @@ import sciris as sc
 from scipy.stats import qmc
 
 here = Path(__file__).parent
-sys.path.insert(0, str(here.parents[1] / 'models' / 'hivsim'))
+sys.path.insert(0, str(here.parents[1] / 'hivsim'))
 import malawi
 import targetfit
 

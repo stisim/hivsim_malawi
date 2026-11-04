@@ -1,7 +1,7 @@
 """
 HIVsim for Malawi: the uncalibrated skeleton for P3.
 
-Data files go in models/hivsim/data/ (see the README there). Parameter values
+Data files go in hivsim/data/ (see the README there). Parameter values
 marked "to calibrate" are placeholders until the P3 target set is agreed.
 
     python malawi.py          # short check run

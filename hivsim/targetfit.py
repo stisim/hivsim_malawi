@@ -2,7 +2,7 @@
 Compare HIVsim Malawi runs with the targets in results/targets.csv: measure each target in a run, score runs,
 and plot the data against the runs of an experiment.
 
-    python targetfit.py ../../experiments/01_coverage_check   # Plots and coverage table from outputs/results.jsonl
+    python targetfit.py ../experiments/01_coverage_check   # Plots and coverage table from outputs/results.jsonl
 
 Each target row is identified by its row number in targets.csv (`tid`). A run's results are a dict of tid -> value.
 """
@@ -15,7 +15,7 @@ import sciris as sc
 import starsim as ss
 
 here = Path(__file__).parent
-targetfile = here.parents[1] / 'results' / 'targets.csv'
+targetfile = here.parent / 'results' / 'targets.csv'
 
 # Colours (reference palette: categorical slots 1 and 2, blue ramp, text inks)
 c_run, c_runs, c_band, c_best, c_data, c_muted = '#2a78d6', '#9ec5f4', '#cde2fb', '#eb6834', '#0b0b0b', '#52514e'

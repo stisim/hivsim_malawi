@@ -15,7 +15,7 @@ from scipy import stats
 
 here = Path(__file__).parent
 srcdir = here / 'data' / 'sources'
-outfile = here.parents[1] / 'results' / 'targets.csv'
+outfile = here.parent / 'results' / 'targets.csv'
 
 # Year labels in EMOD's files -> (survey, fieldwork midpoint)
 emod_surveys = {2004: ('DHS 2004', 2004.9), 2010: ('DHS 2010', 2010.7), 2015: ('MPHIA 2015-16', 2016.2), 2015.5: ('DHS 2015-16', 2015.9)}
