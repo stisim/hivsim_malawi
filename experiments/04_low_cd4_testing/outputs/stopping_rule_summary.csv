@@ -1,0 +1,5 @@
+arm,unit,n,art_unaids,mphia,plhiv,aids_deaths,prev_band,all,art_mphia_plhiv,prev_points_in_their_90,best_score,median_score
+open,run,600,29,61,138,4,480,2,2,16/84,3.9513094350602116,26.646378470955803
+open,set (mean of 3 seeds),200,8,24,44,3,158,0,0,0/84,4.396406976839863,26.307106040001393
+elig,run,600,27,66,104,3,487,0,0,0/84,4.036047804650184,28.376978835904648
+elig,set (mean of 3 seeds),200,10,22,28,1,163,0,0,0/84,3.8047949352755337,27.598400959913178
