@@ -34,10 +34,13 @@ def read(filename, **kwargs):
     return pd.read_csv(path, **kwargs) if path.exists() else None
 
 
-def make_testing(test_scale=1, test_rel_m=1, test_start=2004):
+def make_testing(test_scale=1, test_rel_m=1, test_start=2004, cd4_test_start=None, cd4_test_prob=None):
     """
-    HIV testing: general population, people with low CD4, and ANC. General and low-CD4 testing scale up linearly
-    from test_start to 2020, to levels multiplied by test_scale; men's general testing is test_rel_m times women's
+    HIV testing: general population, people with low CD4, and ANC. General testing scales up linearly from test_start
+    to 2020, to a level multiplied by test_scale; men's is test_rel_m times women's. Testing of people with CD4 < 200
+    follows the same scale-up (0.8 × test_scale at full), unless cd4_test_start and cd4_test_prob are given: then it
+    is a programme of its own (advanced HIV, from the start of the ART programme), rising linearly over 5 years from
+    cd4_test_start to an annual probability of cd4_test_prob
     """
     def scaleup(sim):
         return np.clip((sim.t.now('year') - test_start) / (2020 - test_start), 0, 1)
@@ -47,7 +50,9 @@ def make_testing(test_scale=1, test_rel_m=1, test_start=2004):
         return np.minimum(0.1 * test_scale * scaleup(sim) * rel, 1)
 
     def low_cd4_prob(sim, uids):
-        return np.full(len(uids), min(0.8 * test_scale * scaleup(sim), 1))
+        if cd4_test_start is None:
+            return np.full(len(uids), min(0.8 * test_scale * scaleup(sim), 1))
+        return np.full(len(uids), cd4_test_prob * np.clip((sim.t.now('year') - cd4_test_start) / 5, 0, 1))
 
     undiagnosed = lambda sim: ~sim.diseases.hiv.diagnosed & ~sim.diseases.hiv.on_art
     general = sti.HIVTest(name='general_testing', test_prob_data=general_prob, start=1990, eligibility=undiagnosed)
@@ -57,8 +62,25 @@ def make_testing(test_scale=1, test_rel_m=1, test_start=2004):
     return [general, low_cd4, anc]
 
 
-def make_sim(seed=1, n_agents=10e3, stop=2021, verbose=1/12, hiv_pars=None, nw_pars=None, test_scale=1, test_rel_m=1, test_start=2004, condom_scale=1, **kwargs):
-    """ Make the Malawi sim; hiv_pars and nw_pars are parameter values for sti.HIV and sti.StructuredSexual; condom_scale multiplies condom use (at most 1); see make_testing for the others """
+cd4_eligibility = [(2011, 200), (2014, 350), (2016, 500)] # Malawi's CD4 thresholds for starting ART: <200 to 2010, <350 2011-13, <500 2014-15, everyone from 2016 (test and treat)
+
+
+class ARTEligibility(sti.ART):
+    """ sti.ART where a first start needs a CD4 count below Malawi's threshold of the year (cd4_eligibility), or, from
+    Option B+ in 2011, pregnancy; restarts are not limited. Diagnosed people who aren't eligible wait until they are """
+    def ready(self, uids=None):
+        ok = super().ready(uids)
+        if uids is None:
+            return ok
+        year = self.sim.t.now('year')
+        limit = next((cd4 for y, cd4 in cd4_eligibility if year < y), np.inf)
+        preg = self.sim.demographics.pregnancy.P[uids] if year >= 2011 else np.zeros(len(uids), bool)
+        return ok & ((self.hiv.cd4[uids] < limit) | ~self.art_naive[uids] | preg)
+
+
+def make_sim(seed=1, n_agents=10e3, stop=2021, verbose=1/12, hiv_pars=None, nw_pars=None, art_pars=None, test_scale=1, test_rel_m=1, test_start=2004,
+             cd4_test_start=None, cd4_test_prob=None, cd4_elig=False, condom_scale=1, **kwargs):
+    """ Make the Malawi sim; hiv_pars, nw_pars and art_pars are parameter values for sti.HIV, sti.StructuredSexual and sti.ART; condom_scale multiplies condom use (at most 1); cd4_elig limits first ART starts to Malawi's CD4 thresholds (ARTEligibility); see make_testing for the others """
     check_data()
 
     condoms = read('condom_use.csv')
@@ -74,7 +96,8 @@ def make_sim(seed=1, n_agents=10e3, stop=2021, verbose=1/12, hiv_pars=None, nw_p
     n_art = read('n_art.csv', index_col='year')
     vmmc = read('vmmc.csv') # Share of men circumcised, by age
     vls = read('vls.csv', index_col='year')
-    intvs = make_testing(test_scale, test_rel_m, test_start) + [sti.ART(coverage=n_art, vls_coverage=vls)]
+    art = (ARTEligibility if cd4_elig else sti.ART)(coverage=n_art, vls_coverage=vls, **(art_pars or {}))
+    intvs = make_testing(test_scale, test_rel_m, test_start, cd4_test_start, cd4_test_prob) + [art]
     if vmmc is not None:
         intvs.append(sti.VMMC(coverage=vmmc))
 
@@ -85,7 +108,7 @@ def make_sim(seed=1, n_agents=10e3, stop=2021, verbose=1/12, hiv_pars=None, nw_p
         datafolder=datadir,
         demographics=location,
         diseases=hiv,
-        networks=[nw, ss.MaternalNet()],
+        networks=[nw, ss.PrenatalNet()],
         interventions=intvs,
         rand_seed=seed,
         verbose=verbose,

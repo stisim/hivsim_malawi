@@ -56,7 +56,7 @@ class TargetRecorder(ss.Analyzer):
     def measure(self, tid, row):
         hiv, art = self.sim.diseases.hiv, self.sim.interventions.art
         m = self.mask(row)
-        n = lambda x: float(np.count_nonzero(x)) * self.sim.pars.pop_scale
+        n = lambda x: float(np.count_nonzero(x)) * self.sim.pop_scale
         share = lambda num, den: float(np.count_nonzero(num & den)) / max(np.count_nonzero(den), 1)
         inf = m & hiv.infected
         if row.target == 'prevalence': return share(hiv.infected, m)
@@ -116,12 +116,20 @@ def score(values, targets=None, roles=('primary', 'secondary')):
     return float(np.nanmean(z**2))
 
 
-def load_runs(expdir):
-    """ The runs of an experiment: a DataFrame of parameters and a DataFrame of target values (tid columns), one row per run """
+def load_runs(expdir, select=None, mean_seeds=False):
+    """
+    The runs of an experiment: a DataFrame of parameters and a DataFrame of target values (tid columns), one row per run.
+    `select`: a function of a run's record (a dict) that keeps the runs where it is True; `mean_seeds`: one row per
+    parameter set (`i`), the mean of its seeds
+    """
     rows = [json.loads(line) for line in (Path(expdir) / 'outputs' / 'results.jsonl').read_text().splitlines() if line]
-    runs = sorted([r for r in rows if r.get('kind', 'sample') == 'sample' and 'values' in r], key=lambda r: r['i'])
+    rows = [r for r in rows if select is None or select(r)]
+    runs = sorted([r for r in rows if r.get('kind', 'sample') == 'sample' and 'values' in r], key=lambda r: (r['i'], r.get('seed', 0)))
     pars = pd.DataFrame([r['pars'] for r in runs])
     vals = pd.DataFrame([{int(k): v for k, v in r['values'].items()} for r in runs])
+    if mean_seeds:
+        i = np.array([r['i'] for r in runs])
+        pars, vals = pars.groupby(i).first(), vals.groupby(i).mean()
     return pars, vals, rows
 
 
@@ -161,6 +169,32 @@ def trajectory_check(vals, targets, factor=1.5, start=2000, art_tol=0.1):
     return pd.DataFrame(rows).set_index('check')
 
 
+def stopping_rule(vals, targets, art_tol=0.1, mphia_tol=0.05, factor=1.5, start=2005, band=None):
+    """
+    The stopping rule (docs/targets.md), run by run: within `art_tol` of UNAIDS ART coverage every year; within MPHIA
+    2020-21's intervals widened by `mphia_tol` for ART coverage and suppression among PLHIV, both sexes; within `factor`
+    of UNAIDS PLHIV every year from `start` (and, as a check, of AIDS deaths); and for survey prevalence by age, the
+    share of the run's points inside the middle 90% of `band` (by default all of `vals`), which passes at 90% or more
+    """
+    out = pd.DataFrame(index=vals.index)
+    t = targets[(targets.target == 'art_coverage') & (targets.source == 'UNAIDS 2025')]
+    out['art_unaids'] = (vals[t.index] - t.value.values).abs().le(art_tol).all(axis=1)
+    t = targets[(targets.source == 'MPHIA 2020-21') & targets.target.isin(['art_coverage', 'vls_among_plhiv'])]
+    v = vals[t.index]
+    out['mphia'] = ((v >= t.lower.values - mphia_tol) & (v <= t.upper.values + mphia_tol)).all(axis=1)
+    for target in ['plhiv', 'aids_deaths']:
+        t = targets[(targets.target == target) & (targets.year >= start)]
+        r = vals[t.index] / t.value.values
+        out[target] = ((r >= 1/factor) & (r <= factor)).all(axis=1)
+    t = targets[(targets.target == 'prevalence') & (targets.group == 'all')]
+    b = vals if band is None else band
+    lo, hi = b[t.index].quantile(0.05), b[t.index].quantile(0.95)
+    out['prev_share_in_band'] = ((vals[t.index] >= lo) & (vals[t.index] <= hi)).mean(axis=1)
+    out['prev_band'] = out.prev_share_in_band >= 0.9
+    out['all'] = out.art_unaids & out.mphia & out.plhiv & out.prev_band
+    return out
+
+
 def style(ax, title=None, ylabel=None):
     ax.spines[['top', 'right']].set_visible(False)
     for s in ['left', 'bottom']:
@@ -187,7 +221,8 @@ def draw(ax, x, runs, best, data, lower=None, upper=None, xdata=None):
     ax.errorbar(xd, data, yerr=yerr, fmt='o', ms=4, color=c_data, ecolor=c_data, elinewidth=1, capsize=2, label='Data', zorder=5)
 
 
-def plot(expdir):
+def plot(expdir, select=None, mean_seeds=False, suffix=''):
+    """ The figures and tables of an experiment; `select` and `mean_seeds` as in load_runs(), `suffix` for the file names """
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -195,7 +230,7 @@ def plot(expdir):
     figdir = expdir / 'figures'
     figdir.mkdir(exist_ok=True)
     targets = load_targets()
-    pars, vals, _ = load_runs(expdir)
+    pars, vals, _ = load_runs(expdir, select, mean_seeds)
     scores = np.array([score(dict(row.dropna()), targets) for _, row in vals.iterrows()])
     ib = int(np.nanargmin(scores))
     best = vals.iloc[ib]
@@ -215,7 +250,7 @@ def plot(expdir):
             axes[i, j].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1, decimals=0))
     axes[0, 0].legend(fontsize=7, frameon=False, loc='upper left')
     fig.suptitle(f'Prevalence by age and sex: data and {nruns} runs', fontsize=10, x=0.01, ha='left')
-    fig.savefig(figdir / 'coverage_prevalence_by_age.png', dpi=150)
+    fig.savefig(figdir / f'coverage_prevalence_by_age{suffix}.png', dpi=150)
     plt.close(fig)
 
     # Time series: UNAIDS, incidence, FSW prevalence, numbers on ART by sex
@@ -237,7 +272,7 @@ def plot(expdir):
             ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f'{v/1e3:,.0f}k'))
     axes[0, 0].legend(fontsize=7, frameon=False, loc='upper left')
     fig.suptitle(f'Epidemic over time: data and {nruns} runs', fontsize=10, x=0.01, ha='left')
-    fig.savefig(figdir / 'coverage_time_series.png', dpi=150)
+    fig.savefig(figdir / f'coverage_time_series{suffix}.png', dpi=150)
     plt.close(fig)
 
     # ART and suppression: UNAIDS ART coverage over time, and the MPHIA 2020-21 cascade by sex
@@ -264,28 +299,28 @@ def plot(expdir):
         style(ax, 'Share of PLHIV 15+ (MPHIA 2020-21)')
         ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1, decimals=0))
         fig.suptitle(f'ART and viral suppression: data and {nruns} runs', fontsize=10, x=0.01, ha='left')
-        fig.savefig(figdir / 'coverage_art_suppression.png', dpi=150)
+        fig.savefig(figdir / f'coverage_art_suppression{suffix}.png', dpi=150)
         plt.close(fig)
 
     # Coverage table and best run
     table = coverage_table(vals, targets)
-    table.to_csv(expdir / 'outputs' / 'coverage_table.csv')
+    table.to_csv(expdir / 'outputs' / f'coverage_table{suffix}.csv')
     summary = dict(n_runs=nruns, best_run=int(ib), best_score=float(scores[ib]), median_score=float(np.nanmedian(scores)),
                    best_pars=pars.iloc[ib].to_dict())
     traj = trajectory_check(vals, targets)
-    traj.to_csv(expdir / 'outputs' / 'trajectory_check.csv')
+    traj.to_csv(expdir / 'outputs' / f'trajectory_check{suffix}.csv')
     print('\nWhole trajectories:\n' + traj.round(3).to_string())
 
     # Noise: spread across seeds of one parameter set, against the spread across parameter sets
-    central = [r for r in load_runs(expdir)[2] if r.get('kind') == 'central' and 'values' in r]
+    central = [r for r in load_runs(expdir, select)[2] if r.get('kind') == 'central' and 'values' in r]
     if len(central) > 1:
         cvals = pd.DataFrame([{int(k): v for k, v in r['values'].items()} for r in central])
         ratio = (cvals.std() / vals[cvals.columns].std()).replace([np.inf], np.nan)
         noise = targets.loc[ratio.index].assign(ratio=ratio).groupby(['target', 'source'], sort=False).ratio.median()
-        noise.to_csv(expdir / 'outputs' / 'noise_ratio.csv')
+        noise.to_csv(expdir / 'outputs' / f'noise_ratio{suffix}.csv')
         summary['noise_ratio_median'] = float(ratio.median())
         print('\nSpread across seeds / spread across parameter sets (median by target):\n' + noise.round(2).to_string())
-    sc.savejson(expdir / 'outputs' / 'coverage_summary.json', summary)
+    sc.savejson(expdir / 'outputs' / f'coverage_summary{suffix}.json', summary)
     print(table.to_string())
     print(f'\nBest run {ib}: score {scores[ib]:.2f} (median {np.nanmedian(scores):.2f}); parameters {pars.iloc[ib].round(4).to_dict()}')
     return table, summary

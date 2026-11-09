@@ -1,0 +1,25 @@
+# Exp 04: exp 03's parameters (beta_m2f narrowed to exp 03's good runs), plus low-CD4 testing as a programme of its own; two arms, without and with Malawi's CD4 eligibility for ART; mortality on ART from EMOD's table in every run (see README.md)
+n_samples: 200
+n_seeds: 3 # Per parameter set, the same seeds in both arms
+n_seeds_central: 10 # Per arm
+n_agents: 10000
+stop: 2022 # After the last target (2021.5)
+seed: 4 # For the Latin hypercube
+arms: # name: make_sim() keywords
+  open: {cd4_elig: false}
+  elig: {cd4_elig: true}
+pars: # name: [low, high, scale]; hiv_ and nw_ go to sti.HIV and sti.StructuredSexual
+  hiv_beta_m2f: [0.003, 0.025, log]
+  hiv_rel_init_prev: [0.25, 4, log]
+  nw_prop_f0: [0.6, 0.95, linear]
+  nw_prop_m0: [0.5, 0.9, linear]
+  nw_f1_conc: [0.0, 0.2, linear]
+  nw_m1_conc: [0.05, 0.4, linear]
+  nw_fsw_shares: [0.01, 0.08, linear]
+  nw_client_shares: [0.05, 0.25, linear]
+  test_scale: [0.25, 4, log]
+  condom_scale: [0.5, 1.5, linear]
+  test_rel_m: [0.5, 3, log]
+  test_start: [1995, 2010, linear]
+  cd4_test_start: [2002, 2008, linear]
+  cd4_test_prob: [0.1, 0.95, log]
